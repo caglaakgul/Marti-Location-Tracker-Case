@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.caglaakgul.martilocationtrackercase.data.local.RouteDatabase
 import com.caglaakgul.martilocationtrackercase.data.local.RoutePointDao
+import com.caglaakgul.martilocationtrackercase.data.local.migration.MIGRATION_1_2
+import com.caglaakgul.martilocationtrackercase.data.local.migration.MIGRATION_2_3
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import dagger.Module
@@ -26,7 +28,9 @@ object LocationModule {
             context,
             RouteDatabase::class.java,
             "route_database"
-        ).build()
+        )
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .build()
     }
 
     @Provides

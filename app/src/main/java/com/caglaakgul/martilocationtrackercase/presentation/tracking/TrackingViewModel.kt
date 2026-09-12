@@ -43,6 +43,7 @@ class TrackingViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TrackingUiState())
     val uiState: StateFlow<TrackingUiState> = _uiState.asStateFlow()
     private var snapRouteJob: Job? = null
+    private var isResettingRoute = false
 
     init {
         observeCurrentLocation()
@@ -112,24 +113,31 @@ class TrackingViewModel @Inject constructor(
                 _uiState.update { state ->
                     state.copy(liveRouteLocations = liveRoute)
                 }
-                updateRouteLine(
-                    routePoints = _uiState.value.routePoints,
-                    liveRoute = liveRoute
-                )
+                if (!isResettingRoute) {
+                    updateRouteLine(
+                        routePoints = _uiState.value.savedRoutePoints,
+                        liveRoute = liveRoute
+                    )
+                }
             }
         }
     }
 
     private fun observeRoute() {
         viewModelScope.launch {
-            observeRouteUseCase().collect { routePoints ->
+            observeRouteUseCase().collect { savedRoutePoints ->
                 _uiState.update { state ->
-                    state.copy(routePoints = routePoints)
+                    state.copy(
+                        savedRoutePoints = savedRoutePoints,
+                        routePoints = savedRoutePoints.filter { point -> point.isMarker }
+                    )
                 }
-                updateRouteLine(
-                    routePoints = routePoints,
-                    liveRoute = _uiState.value.liveRouteLocations
-                )
+                if (!isResettingRoute) {
+                    updateRouteLine(
+                        routePoints = savedRoutePoints,
+                        liveRoute = _uiState.value.liveRouteLocations
+                    )
+                }
             }
         }
     }
@@ -156,16 +164,23 @@ class TrackingViewModel @Inject constructor(
 
     private fun resetRoute() {
         viewModelScope.launch {
-            resetRouteUseCase()
+            isResettingRoute = true
+            snapRouteJob?.cancel()
+            snapRouteJob = null
             clearLiveRouteUseCase()
+            resetRouteUseCase()
             _uiState.update { state ->
                 state.copy(
                     selectedAddress = null,
                     liveRouteLocations = emptyList(),
+                    savedRoutePoints = emptyList(),
+                    routePoints = emptyList(),
                     routeLinePoints = emptyList(),
+                    routeLineSegments = emptyList(),
                     displayLocation = state.currentLocation
                 )
             }
+            isResettingRoute = false
         }
     }
 
@@ -200,16 +215,22 @@ class TrackingViewModel @Inject constructor(
             routePoints = routePoints,
             liveRoute = liveRoute
         )
+        val rawLineSegments = buildRouteLineSegments(
+            routePoints = routePoints,
+            liveRoute = liveRoute
+        )
 
         if (
             rawLinePoints.size < MIN_POINTS_TO_SNAP ||
-            liveRoute.size < MIN_LIVE_POINTS_TO_SNAP ||
+            liveRoute.size == 1 ||
             BuildConfig.MAPS_API_KEY.isBlank()
         ) {
             _uiState.update { state ->
                 state.copy(
                     routeLinePoints = rawLinePoints,
-                    displayLocation = liveRoute.lastOrNull() ?: state.displayLocation
+                    routeLineSegments = rawLineSegments,
+                    displayLocation = rawLinePoints.lastOrNull()?.toUserLocation()
+                        ?: state.displayLocation
                 )
             }
             return
@@ -218,15 +239,23 @@ class TrackingViewModel @Inject constructor(
         snapRouteJob?.cancel()
         snapRouteJob = viewModelScope.launch {
             runCatching {
-                snapRouteToRoadUseCase(rawLinePoints.takeLast(MAX_ROADS_API_POINTS), BuildConfig.MAPS_API_KEY)
-            }.onSuccess { snappedPoints ->
-                if (snappedPoints.isNotEmpty()) {
-                    val snappedCurrentLocation = snappedPoints.last().toUserLocation(
+                rawLineSegments.map { segment ->
+                    if (segment.size < MIN_POINTS_TO_SNAP) {
+                        segment
+                    } else {
+                        snapRouteToRoadUseCase(segment.takeLast(MAX_ROADS_API_POINTS), BuildConfig.MAPS_API_KEY)
+                    }
+                }
+            }.onSuccess { snappedSegments ->
+                val snappedLinePoints = snappedSegments.flatten()
+                if (snappedLinePoints.isNotEmpty()) {
+                    val snappedCurrentLocation = snappedLinePoints.last().toUserLocation(
                         fallbackRecordedAt = liveRoute.lastOrNull()?.recordedAt ?: System.currentTimeMillis()
                     )
                     _uiState.update { state ->
                         state.copy(
-                            routeLinePoints = snappedPoints,
+                            routeLinePoints = snappedLinePoints,
+                            routeLineSegments = snappedSegments,
                             displayLocation = snappedCurrentLocation
                         )
                     }
@@ -235,7 +264,9 @@ class TrackingViewModel @Inject constructor(
                 _uiState.update { state ->
                     state.copy(
                         routeLinePoints = rawLinePoints,
-                        displayLocation = liveRoute.lastOrNull() ?: state.displayLocation
+                        routeLineSegments = rawLineSegments,
+                        displayLocation = rawLinePoints.lastOrNull()?.toUserLocation()
+                            ?: state.displayLocation
                     )
                 }
             }
@@ -246,13 +277,26 @@ class TrackingViewModel @Inject constructor(
         routePoints: List<RoutePoint>,
         liveRoute: List<UserLocation>
     ): List<RoutePoint> {
-        if (liveRoute.isEmpty()) return routePoints
+        return buildRouteLineSegments(routePoints, liveRoute).flatten()
+    }
+
+    private fun buildRouteLineSegments(
+        routePoints: List<RoutePoint>,
+        liveRoute: List<UserLocation>
+    ): List<List<RoutePoint>> {
+        if (liveRoute.isEmpty()) {
+            return routePoints
+                .groupBy { point -> point.segmentId }
+                .values
+                .filter { segment -> segment.isNotEmpty() }
+        }
 
         val liveRoutePoints = liveRoute.map { location ->
             RoutePoint(
                 latitude = location.latitude,
                 longitude = location.longitude,
-                createdAt = location.recordedAt
+                createdAt = location.recordedAt,
+                segmentId = location.recordedAt
             )
         }
         val firstLivePoint = liveRoutePoints.first()
@@ -260,7 +304,10 @@ class TrackingViewModel @Inject constructor(
             routePoint.createdAt < firstLivePoint.createdAt
         }
 
-        return routeBeforeLivePath + liveRoutePoints
+        return routeBeforeLivePath
+            .groupBy { point -> point.segmentId }
+            .values
+            .filter { segment -> segment.isNotEmpty() } + listOf(liveRoutePoints)
     }
 
     private fun RoutePoint.toUserLocation(fallbackRecordedAt: Long): UserLocation {
@@ -271,9 +318,16 @@ class TrackingViewModel @Inject constructor(
         )
     }
 
+    private fun RoutePoint.toUserLocation(): UserLocation {
+        return UserLocation(
+            latitude = latitude,
+            longitude = longitude,
+            recordedAt = createdAt
+        )
+    }
+
     private companion object {
         const val MIN_POINTS_TO_SNAP = 2
-        const val MIN_LIVE_POINTS_TO_SNAP = 2
         const val MAX_ROADS_API_POINTS = 100
     }
 }

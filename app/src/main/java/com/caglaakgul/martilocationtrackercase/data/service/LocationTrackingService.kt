@@ -35,6 +35,7 @@ class LocationTrackingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var locationJob: Job? = null
+    private var routeSegmentId: Long = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_START_TRACKING) {
@@ -58,6 +59,7 @@ class LocationTrackingService : Service() {
 
         if (locationJob?.isActive == true) return
 
+        routeSegmentId = System.currentTimeMillis()
         trackingStateStore.clearLiveRoute()
         locationJob = serviceScope.launch {
             locationRepository
@@ -69,7 +71,7 @@ class LocationTrackingService : Service() {
                 .collect { location ->
                     trackingStateStore.setCurrentLocation(location)
                     trackingStateStore.addLiveRouteLocation(location)
-                    addRoutePointUseCase(location)
+                    addRoutePointUseCase(location, routeSegmentId)
                 }
         }
     }

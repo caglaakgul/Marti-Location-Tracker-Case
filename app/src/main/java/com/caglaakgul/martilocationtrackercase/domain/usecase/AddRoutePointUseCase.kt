@@ -9,14 +9,17 @@ import javax.inject.Inject
 class AddRoutePointUseCase @Inject constructor(
     private val routeRepository: RouteRepository
 ) {
-    suspend operator fun invoke(location: UserLocation) {
-        val lastPoint = routeRepository.getLastPoint()
-        val shouldAddPoint = lastPoint == null ||
-            lastPoint.distanceTo(location) >= MIN_DISTANCE_BETWEEN_MARKERS_METERS
+    suspend operator fun invoke(location: UserLocation, segmentId: Long) {
+        val lastMarkerPoint = routeRepository.getLastMarkerPoint(segmentId)
+        val shouldMarkPoint = lastMarkerPoint == null ||
+            lastMarkerPoint.distanceTo(location) >= MIN_DISTANCE_BETWEEN_MARKERS_METERS
 
-        if (shouldAddPoint) {
-            routeRepository.addPoint(location.toRoutePoint())
-        }
+        routeRepository.addPoint(
+            location.toRoutePoint(
+                isMarker = shouldMarkPoint,
+                segmentId = segmentId
+            )
+        )
     }
 
     private fun RoutePoint.distanceTo(location: UserLocation): Float {
@@ -31,11 +34,13 @@ class AddRoutePointUseCase @Inject constructor(
         return results.first()
     }
 
-    private fun UserLocation.toRoutePoint(): RoutePoint {
+    private fun UserLocation.toRoutePoint(isMarker: Boolean, segmentId: Long): RoutePoint {
         return RoutePoint(
             latitude = latitude,
             longitude = longitude,
-            createdAt = recordedAt
+            createdAt = recordedAt,
+            isMarker = isMarker,
+            segmentId = segmentId
         )
     }
 

@@ -9,5 +9,7 @@ data class RoutePointEntity(
     val id: Long = 0L,
     val latitude: Double,
     val longitude: Double,
-    val createdAt: Long
+    val createdAt: Long,
+    val isMarker: Boolean,
+    val segmentId: Long
 )

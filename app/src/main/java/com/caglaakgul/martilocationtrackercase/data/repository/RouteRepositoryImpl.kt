@@ -18,8 +18,8 @@ class RouteRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getLastPoint(): RoutePoint? {
-        return routePointDao.getLastPoint()?.toDomain()
+    override suspend fun getLastMarkerPoint(segmentId: Long): RoutePoint? {
+        return routePointDao.getLastMarkerPoint(segmentId)?.toDomain()
     }
 
     override suspend fun addPoint(point: RoutePoint) {
@@ -35,7 +35,9 @@ class RouteRepositoryImpl @Inject constructor(
             id = id,
             latitude = latitude,
             longitude = longitude,
-            createdAt = createdAt
+            createdAt = createdAt,
+            isMarker = isMarker,
+            segmentId = segmentId
         )
     }
 
@@ -44,7 +46,9 @@ class RouteRepositoryImpl @Inject constructor(
             id = id,
             latitude = latitude,
             longitude = longitude,
-            createdAt = createdAt
+            createdAt = createdAt,
+            isMarker = isMarker,
+            segmentId = segmentId
         )
     }
 }

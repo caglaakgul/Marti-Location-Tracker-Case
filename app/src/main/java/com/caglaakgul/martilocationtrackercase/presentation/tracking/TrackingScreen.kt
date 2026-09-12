@@ -107,7 +107,7 @@ fun TrackingContent(
             TrackingMap(
                 currentLocation = uiState.displayLocation ?: uiState.currentLocation,
                 routePoints = uiState.routePoints,
-                routeLinePoints = uiState.routeLinePoints,
+                routeLineSegments = uiState.routeLineSegments,
                 onRoutePointClick = { point ->
                     onAction(TrackingUiAction.RoutePointClicked(point))
                 },
@@ -150,7 +150,7 @@ fun TrackingContent(
 private fun TrackingMap(
     currentLocation: UserLocation?,
     routePoints: List<RoutePoint>,
-    routeLinePoints: List<RoutePoint>,
+    routeLineSegments: List<List<RoutePoint>>,
     onRoutePointClick: (RoutePoint) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -173,12 +173,14 @@ private fun TrackingMap(
         cameraPositionState = cameraPositionState,
         properties = MapProperties(isMyLocationEnabled = false)
     ) {
-        if (routeLinePoints.size > 1) {
-            Polyline(
-                points = routeLinePoints.map { point -> point.toLatLng() },
-                color = Color(0xFF4D9BFF),
-                width = 16f
-            )
+        routeLineSegments.forEach { segment ->
+            if (segment.size > 1) {
+                Polyline(
+                    points = segment.map { point -> point.toLatLng() },
+                    color = Color(0xFF4D9BFF),
+                    width = 16f
+                )
+            }
         }
 
         currentLocation?.let { location ->
@@ -242,6 +244,7 @@ private fun TrackingContentPreview() {
                 ),
                 routePoints = previewRoutePoints,
                 routeLinePoints = previewRoutePoints,
+                routeLineSegments = listOf(previewRoutePoints),
                 hasLocationPermission = true,
                 isTracking = true
             ),

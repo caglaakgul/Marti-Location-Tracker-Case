@@ -5,10 +5,9 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [RoutePointEntity::class],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
-
 abstract class RouteDatabase : RoomDatabase() {
     abstract fun routePointDao(): RoutePointDao
 }
