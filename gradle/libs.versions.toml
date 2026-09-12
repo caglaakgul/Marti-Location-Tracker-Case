@@ -16,6 +16,8 @@ retrofit = "2.11.0"
 okhttp = "4.12.0"
 lifecycle = "2.8.4"
 coroutinesPlayServices = "1.8.1"
+coroutinesTest = "1.8.1"
+mockk = "1.11.0"
 ksp = "2.2.10-2.0.2"
 androidxHilt = "1.2.0"
 
@@ -45,6 +47,8 @@ google-maps-compose = { group = "com.google.maps.android", name = "maps-compose"
 google-dagger-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 google-dagger-hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
