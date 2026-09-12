@@ -7,7 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -16,21 +18,27 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker.PERMISSION_GRANTED
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.caglaakgul.martilocationtrackercase.domain.model.RoutePoint
 import com.caglaakgul.martilocationtrackercase.domain.model.UserLocation
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.components.AddressPanel
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.components.TrackingControls
 import com.caglaakgul.martilocationtrackercase.ui.theme.MartiLocationTrackerCaseTheme
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 
 @Composable
@@ -43,9 +51,16 @@ fun TrackingScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        viewModel.onLocationPermissionResult(
-            isGranted = permissions.values.any { isGranted -> isGranted }
+        viewModel.onAction(
+            TrackingUiAction.LocationPermissionChanged(
+                isGranted = permissions.values.any { isGranted -> isGranted }
+            )
         )
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        viewModel.onAction(TrackingUiAction.StartTrackingClicked)
     }
 
     LaunchedEffect(Unit) {
@@ -54,20 +69,30 @@ fun TrackingScreen(
         }
 
         if (hasLocationPermission) {
-            viewModel.onLocationPermissionResult(isGranted = true)
+            viewModel.onAction(TrackingUiAction.LocationPermissionChanged(isGranted = true))
         } else {
             permissionLauncher.launch(locationPermissions)
         }
     }
 
     TrackingContent(
-        uiState = uiState
+        uiState = uiState,
+        onAction = { action ->
+            if (action == TrackingUiAction.StartTrackingClicked &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                viewModel.onAction(action)
+            }
+        }
     )
 }
 
 @Composable
 fun TrackingContent(
     uiState: TrackingUiState,
+    onAction: (TrackingUiAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -80,9 +105,36 @@ fun TrackingContent(
                 .padding(innerPadding)
         ) {
             TrackingMap(
-                currentLocation = uiState.currentLocation,
-                hasLocationPermission = uiState.hasLocationPermission,
+                currentLocation = uiState.displayLocation ?: uiState.currentLocation,
+                routePoints = uiState.routePoints,
+                routeLinePoints = uiState.routeLinePoints,
+                onRoutePointClick = { point ->
+                    onAction(TrackingUiAction.RoutePointClicked(point))
+                },
                 modifier = Modifier.fillMaxSize()
+            )
+
+            TrackingControls(
+                isTracking = uiState.isTracking,
+                routePointCount = uiState.routePoints.size,
+                hasLocationPermission = uiState.hasLocationPermission,
+                onStartClick = { onAction(TrackingUiAction.StartTrackingClicked) },
+                onStopClick = { onAction(TrackingUiAction.StopTrackingClicked) },
+                onResetClick = { onAction(TrackingUiAction.ResetRouteClicked) },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(16.dp)
+            )
+
+            AddressPanel(
+                address = uiState.selectedAddress,
+                isLoading = uiState.isLoadingAddress,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
             )
 
             if (uiState.isLoadingLocation) {
@@ -97,7 +149,9 @@ fun TrackingContent(
 @Composable
 private fun TrackingMap(
     currentLocation: UserLocation?,
-    hasLocationPermission: Boolean,
+    routePoints: List<RoutePoint>,
+    routeLinePoints: List<RoutePoint>,
+    onRoutePointClick: (RoutePoint) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val defaultLocation = LatLng(41.0082, 28.9784)
@@ -117,18 +171,44 @@ private fun TrackingMap(
     GoogleMap(
         modifier = modifier,
         cameraPositionState = cameraPositionState,
-        properties = MapProperties(isMyLocationEnabled = hasLocationPermission)
+        properties = MapProperties(isMyLocationEnabled = false)
     ) {
+        if (routeLinePoints.size > 1) {
+            Polyline(
+                points = routeLinePoints.map { point -> point.toLatLng() },
+                color = Color(0xFF4D9BFF),
+                width = 16f
+            )
+        }
+
         currentLocation?.let { location ->
+            Circle(
+                center = location.toLatLng(),
+                radius = CURRENT_LOCATION_RADIUS_METERS,
+                fillColor = Color(0xFF4D9BFF),
+                strokeColor = Color.White,
+                strokeWidth = 5f
+            )
+        }
+
+        routePoints.forEachIndexed { index, point ->
             Marker(
-                state = MarkerState(position = location.toLatLng()),
-                title = "Bulunduğun konum"
+                state = MarkerState(position = point.toLatLng()),
+                title = "Konum ${index + 1}",
+                onClick = {
+                    onRoutePointClick(point)
+                    false
+                }
             )
         }
     }
 }
 
 private fun UserLocation.toLatLng(): LatLng {
+    return LatLng(latitude, longitude)
+}
+
+private fun RoutePoint.toLatLng(): LatLng {
     return LatLng(latitude, longitude)
 }
 
@@ -144,6 +224,7 @@ private fun locationPermissions(): Array<String> {
 }
 
 private const val DEFAULT_ZOOM = 16f
+private const val CURRENT_LOCATION_RADIUS_METERS = 9.0
 
 @Preview(showBackground = true)
 @Composable
@@ -155,8 +236,16 @@ private fun TrackingContentPreview() {
                     latitude = 41.0082,
                     longitude = 28.9784
                 ),
-                hasLocationPermission = true
-            )
+                displayLocation = UserLocation(
+                    latitude = 41.0082,
+                    longitude = 28.9784
+                ),
+                routePoints = previewRoutePoints,
+                routeLinePoints = previewRoutePoints,
+                hasLocationPermission = true,
+                isTracking = true
+            ),
+            onAction = {}
         )
     }
 }
@@ -166,7 +255,14 @@ private fun TrackingContentPreview() {
 private fun TrackingLoadingPreview() {
     MartiLocationTrackerCaseTheme {
         TrackingContent(
-            uiState = TrackingUiState(isLoadingLocation = true)
+            uiState = TrackingUiState(isLoadingLocation = true),
+            onAction = {}
         )
     }
 }
+
+private val previewRoutePoints = listOf(
+    RoutePoint(latitude = 40.820750, longitude = 29.305320, createdAt = 0L),
+    RoutePoint(latitude = 40.822100, longitude = 29.304400, createdAt = 1L),
+    RoutePoint(latitude = 40.823600, longitude = 29.303700, createdAt = 2L)
+)

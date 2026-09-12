@@ -1,7 +1,8 @@
 package com.caglaakgul.martilocationtrackercase.domain.model
 
-data class UserLocation(
+data class RoutePoint(
+    val id: Long = 0L,
     val latitude: Double,
     val longitude: Double,
-    val recordedAt: Long = System.currentTimeMillis()
+    val createdAt: Long
 )
