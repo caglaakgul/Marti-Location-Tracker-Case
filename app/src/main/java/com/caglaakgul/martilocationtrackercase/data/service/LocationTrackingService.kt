@@ -54,7 +54,7 @@ class LocationTrackingService : Service() {
 
     private fun startTracking() {
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        startForeground(LOCATION_TRACKING_NOTIFICATION_ID, buildNotification())
         trackingStateStore.setTracking(true)
 
         if (locationJob?.isActive == true) return
@@ -84,7 +84,7 @@ class LocationTrackingService : Service() {
         trackingStateStore.setTracking(false)
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun buildNotification() = NotificationCompat.Builder(this, LOCATION_TRACKING_CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_launcher_foreground)
         .setContentTitle(getString(R.string.tracking_notification_title))
         .setContentText(getString(R.string.tracking_notification_text))
@@ -94,7 +94,7 @@ class LocationTrackingService : Service() {
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
-            CHANNEL_ID,
+            LOCATION_TRACKING_CHANNEL_ID,
             getString(R.string.tracking_notification_channel_name),
             NotificationManager.IMPORTANCE_LOW)
 
@@ -104,10 +104,6 @@ class LocationTrackingService : Service() {
     }
 
     companion object {
-        private const val ACTION_START_TRACKING = "com.caglaakgul.martilocationtrackercase.START_TRACKING"
-        private const val CHANNEL_ID = "location_tracking_channel"
-        private const val NOTIFICATION_ID = 1001
-
         fun createStartIntent(context: Context): Intent {
             return Intent(context, LocationTrackingService::class.java).apply {
                 action = ACTION_START_TRACKING

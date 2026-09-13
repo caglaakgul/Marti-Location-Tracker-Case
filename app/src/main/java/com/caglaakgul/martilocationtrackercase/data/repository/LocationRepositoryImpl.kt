@@ -98,12 +98,6 @@ class LocationRepositoryImpl @Inject constructor(
             fusedLocationProviderClient.removeLocationUpdates(callback)
         }
     }
-
-    private companion object {
-        const val LOCATION_UPDATE_INTERVAL_MILLIS = 1_000L
-        const val FASTEST_LOCATION_UPDATE_INTERVAL_MILLIS = 500L
-        const val MIN_LOCATION_UPDATE_DISTANCE_METERS = 0f
-    }
 }
 
 private fun android.location.Location.accuracyMeters(): Float? {

@@ -57,9 +57,4 @@ class AddRoutePointUseCase @Inject constructor(
             segmentId = segmentId
         )
     }
-
-    private companion object {
-        const val MIN_DISTANCE_BETWEEN_ROUTE_POINTS_METERS = 10f
-        const val MIN_DISTANCE_BETWEEN_MARKERS_METERS = 100f
-    }
 }

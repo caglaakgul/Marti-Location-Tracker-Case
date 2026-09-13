@@ -16,6 +16,8 @@ import com.caglaakgul.martilocationtrackercase.domain.usecase.ResetRouteUseCase
 import com.caglaakgul.martilocationtrackercase.domain.usecase.SnapRouteToRoadUseCase
 import com.caglaakgul.martilocationtrackercase.domain.usecase.StartTrackingUseCase
 import com.caglaakgul.martilocationtrackercase.domain.usecase.StopTrackingUseCase
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.mapper.defaultTrackingTexts
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.mapper.toUserLocation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,7 +43,9 @@ class TrackingViewModel @Inject constructor(
     private val snapRouteToRoadUseCase: SnapRouteToRoadUseCase
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(TrackingUiState())
+    private val _uiState = MutableStateFlow(
+        TrackingUiState(texts = defaultTrackingTexts())
+    )
     val uiState: StateFlow<TrackingUiState> = _uiState.asStateFlow()
     private var snapRouteJob: Job? = null
     private var isResettingRoute = false
@@ -55,9 +60,10 @@ class TrackingViewModel @Inject constructor(
     fun onAction(action: TrackingUiAction) {
         when (action) {
             is TrackingUiAction.LocationPermissionChanged -> onLocationPermissionResult(action.isGranted)
-            TrackingUiAction.StartTrackingClicked -> startTracking()
-            TrackingUiAction.StopTrackingClicked -> stopTracking()
-            TrackingUiAction.ResetRouteClicked -> resetRoute()
+            is TrackingUiAction.StartTrackingClicked -> startTracking()
+            is TrackingUiAction.StopTrackingClicked -> stopTracking()
+            is TrackingUiAction.ResetRouteClicked -> resetRoute()
+            is TrackingUiAction.CloseAddressClicked -> closeAddress()
             is TrackingUiAction.RoutePointClicked -> loadAddress(action.point)
         }
     }
@@ -154,6 +160,9 @@ class TrackingViewModel @Inject constructor(
 
     private fun startTracking() {
         if (_uiState.value.hasLocationPermission) {
+            _uiState.update { state ->
+                state.copy(centerMapRequestId = state.centerMapRequestId + 1)
+            }
             startTrackingUseCase()
         }
     }
@@ -190,20 +199,38 @@ class TrackingViewModel @Inject constructor(
                 state.copy(isLoadingAddress = true, selectedAddress = null)
             }
 
-            val address = runCatching {
+            val addressResult = runCatching {
                 getAddressUseCase(
                     latitude = point.latitude,
                     longitude = point.longitude,
                     apiKey = BuildConfig.MAPS_API_KEY
                 )
-            }.getOrDefault("")
+            }
 
             _uiState.update { state ->
                 state.copy(
                     isLoadingAddress = false,
-                    selectedAddress = address.ifBlank { "Adres bulunamadı" }
+                    selectedAddress = addressResult.fold(
+                        onSuccess = { address -> address.ifBlank { state.texts.addressNotFound } },
+                        onFailure = { error ->
+                            if (error is IOException) {
+                                state.texts.noInternetConnection
+                            } else {
+                                state.texts.addressNotFound
+                            }
+                        }
+                    )
                 )
             }
+        }
+    }
+
+    private fun closeAddress() {
+        _uiState.update { state ->
+            state.copy(
+                selectedAddress = null,
+                isLoadingAddress = false
+            )
         }
     }
 
@@ -310,24 +337,4 @@ class TrackingViewModel @Inject constructor(
             .filter { segment -> segment.isNotEmpty() } + listOf(liveRoutePoints)
     }
 
-    private fun RoutePoint.toUserLocation(fallbackRecordedAt: Long): UserLocation {
-        return UserLocation(
-            latitude = latitude,
-            longitude = longitude,
-            recordedAt = fallbackRecordedAt
-        )
-    }
-
-    private fun RoutePoint.toUserLocation(): UserLocation {
-        return UserLocation(
-            latitude = latitude,
-            longitude = longitude,
-            recordedAt = createdAt
-        )
-    }
-
-    private companion object {
-        const val MIN_POINTS_TO_SNAP = 2
-        const val MAX_ROADS_API_POINTS = 100
-    }
 }

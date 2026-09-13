@@ -7,5 +7,6 @@ sealed interface TrackingUiAction {
     data object StartTrackingClicked : TrackingUiAction
     data object StopTrackingClicked : TrackingUiAction
     data object ResetRouteClicked : TrackingUiAction
+    data object CloseAddressClicked : TrackingUiAction
     data class RoutePointClicked(val point: RoutePoint) : TrackingUiAction
 }

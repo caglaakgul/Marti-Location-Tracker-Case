@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.TrackingUiState
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.mapper.defaultTrackingTexts
 import com.caglaakgul.martilocationtrackercase.ui.theme.MartiLocationTrackerCaseTheme
 
 @Composable
@@ -23,6 +25,7 @@ fun TrackingControls(
     isTracking: Boolean,
     routePointCount: Int,
     hasLocationPermission: Boolean,
+    texts: TrackingUiState.Texts,
     onStartClick: () -> Unit,
     onStopClick: () -> Unit,
     onResetClick: () -> Unit,
@@ -40,11 +43,11 @@ fun TrackingControls(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = if (isTracking) "Takip aktif" else "Takip durdu",
+                text = if (isTracking) texts.trackingActive else texts.trackingStopped,
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "$routePointCount konum noktası",
+                text = "$routePointCount ${texts.routePointCountSuffix}",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -57,7 +60,7 @@ fun TrackingControls(
                     enabled = hasLocationPermission && !isTracking,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = "Başlat")
+                    Text(text = texts.startButton)
                 }
 
                 OutlinedButton(
@@ -65,7 +68,7 @@ fun TrackingControls(
                     enabled = isTracking,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = "Durdur")
+                    Text(text = texts.stopButton)
                 }
 
                 OutlinedButton(
@@ -73,7 +76,7 @@ fun TrackingControls(
                     enabled = routePointCount > 0,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = "Sıfırla")
+                    Text(text = texts.resetButton)
                 }
             }
         }
@@ -88,6 +91,7 @@ private fun TrackingControlsPreview() {
             isTracking = true,
             routePointCount = 4,
             hasLocationPermission = true,
+            texts = defaultTrackingTexts(),
             onStartClick = {},
             onStopClick = {},
             onResetClick = {},

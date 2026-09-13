@@ -32,6 +32,8 @@ import com.caglaakgul.martilocationtrackercase.domain.model.RoutePoint
 import com.caglaakgul.martilocationtrackercase.domain.model.UserLocation
 import com.caglaakgul.martilocationtrackercase.presentation.tracking.components.AddressPanel
 import com.caglaakgul.martilocationtrackercase.presentation.tracking.components.TrackingControls
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.mapper.defaultTrackingTexts
+import com.caglaakgul.martilocationtrackercase.presentation.tracking.mapper.toLatLng
 import com.caglaakgul.martilocationtrackercase.ui.theme.MartiLocationTrackerCaseTheme
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -112,6 +114,8 @@ fun TrackingContent(
                 routePoints = uiState.routePoints,
                 routeLineSegments = uiState.routeLineSegments,
                 hasLocationPermission = uiState.hasLocationPermission,
+                centerMapRequestId = uiState.centerMapRequestId,
+                texts = uiState.texts,
                 onRoutePointClick = { point ->
                     onAction(TrackingUiAction.RoutePointClicked(point))
                 },
@@ -122,6 +126,7 @@ fun TrackingContent(
                 isTracking = uiState.isTracking,
                 routePointCount = uiState.routePoints.size,
                 hasLocationPermission = uiState.hasLocationPermission,
+                texts = uiState.texts,
                 onStartClick = { onAction(TrackingUiAction.StartTrackingClicked) },
                 onStopClick = { onAction(TrackingUiAction.StopTrackingClicked) },
                 onResetClick = { onAction(TrackingUiAction.ResetRouteClicked) },
@@ -135,10 +140,12 @@ fun TrackingContent(
             AddressPanel(
                 address = uiState.selectedAddress,
                 isLoading = uiState.isLoadingAddress,
+                texts = uiState.texts,
+                onCloseClick = { onAction(TrackingUiAction.CloseAddressClicked) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(16.dp).padding(bottom = 48.dp)
             )
 
             if (uiState.isLoadingLocation) {
@@ -156,21 +163,36 @@ private fun TrackingMap(
     routePoints: List<RoutePoint>,
     routeLineSegments: List<List<RoutePoint>>,
     hasLocationPermission: Boolean,
+    centerMapRequestId: Int,
+    texts: TrackingUiState.Texts,
     onRoutePointClick: (RoutePoint) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val defaultLocation = LatLng(41.0082, 28.9784)
     val mapLocation = currentLocation?.toLatLng() ?: defaultLocation
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(mapLocation, DEFAULT_ZOOM)
+        position = CameraPosition.fromLatLngZoom(mapLocation, DEFAULT_MAP_ZOOM)
     }
     val hasMovedToInitialLocation = remember { mutableStateOf(false) }
+    val lastHandledCenterMapRequestId = remember { mutableStateOf(0) }
 
     LaunchedEffect(currentLocation) {
         if (currentLocation != null && !hasMovedToInitialLocation.value) {
             hasMovedToInitialLocation.value = true
             cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngZoom(currentLocation.toLatLng(), DEFAULT_ZOOM)
+                CameraUpdateFactory.newLatLngZoom(currentLocation.toLatLng(), DEFAULT_MAP_ZOOM)
+            )
+        }
+    }
+
+    LaunchedEffect(centerMapRequestId, currentLocation) {
+        if (
+            currentLocation != null &&
+            centerMapRequestId > lastHandledCenterMapRequestId.value
+        ) {
+            lastHandledCenterMapRequestId.value = centerMapRequestId
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(currentLocation.toLatLng(), DEFAULT_MAP_ZOOM)
             )
         }
     }
@@ -203,7 +225,7 @@ private fun TrackingMap(
             routePoints.forEachIndexed { index, point ->
                 Marker(
                     state = MarkerState(position = point.toLatLng()),
-                    title = "Konum ${index + 1}",
+                    title = "${texts.markerTitlePrefix} ${index + 1}",
                     onClick = {
                         onRoutePointClick(point)
                         false
@@ -212,14 +234,6 @@ private fun TrackingMap(
             }
         }
     }
-}
-
-private fun UserLocation.toLatLng(): LatLng {
-    return LatLng(latitude, longitude)
-}
-
-private fun RoutePoint.toLatLng(): LatLng {
-    return LatLng(latitude, longitude)
 }
 
 private fun locationPermissions(): Array<String> {
@@ -233,16 +247,13 @@ private fun locationPermissions(): Array<String> {
     }
 }
 
-private const val DEFAULT_ZOOM = 16f
-private val MAP_CONTROLS_TOP_PADDING = 232.dp
-private val MAP_CONTROLS_BOTTOM_PADDING = 64.dp
-
 @Preview(showBackground = true)
 @Composable
 private fun TrackingContentPreview() {
     MartiLocationTrackerCaseTheme {
         TrackingContent(
             uiState = TrackingUiState(
+                texts = defaultTrackingTexts(),
                 currentLocation = UserLocation(
                     latitude = 41.0082,
                     longitude = 28.9784
@@ -267,7 +278,10 @@ private fun TrackingContentPreview() {
 private fun TrackingLoadingPreview() {
     MartiLocationTrackerCaseTheme {
         TrackingContent(
-            uiState = TrackingUiState(isLoadingLocation = true),
+            uiState = TrackingUiState(
+                texts = defaultTrackingTexts(),
+                isLoadingLocation = true
+            ),
             onAction = {}
         )
     }
