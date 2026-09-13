@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Marti Location Tracker Case</string>
+    <string name="tracking_notification_channel_name">Konum takibi</string>
+    <string name="tracking_notification_title">Konum takibi aktif</string>
+    <string name="tracking_notification_text">Rota bilgilerin kaydediliyor.</string>
+    <string name="close">Kapat</string>
 </resources>
