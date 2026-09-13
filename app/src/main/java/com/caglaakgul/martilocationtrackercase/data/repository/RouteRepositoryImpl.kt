@@ -22,6 +22,14 @@ class RouteRepositoryImpl @Inject constructor(
         return routePointDao.getLastMarkerPoint(segmentId)?.toDomain()
     }
 
+    override suspend fun getFirstPoint(segmentId: Long): RoutePoint? {
+        return routePointDao.getFirstPoint(segmentId)?.toDomain()
+    }
+
+    override suspend fun getLastPoint(segmentId: Long): RoutePoint? {
+        return routePointDao.getLastPoint(segmentId)?.toDomain()
+    }
+
     override suspend fun addPoint(point: RoutePoint) {
         routePointDao.insert(point.toEntity())
     }

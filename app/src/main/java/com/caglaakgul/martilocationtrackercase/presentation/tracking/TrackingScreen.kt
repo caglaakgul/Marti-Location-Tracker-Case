@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,9 +36,9 @@ import com.caglaakgul.martilocationtrackercase.ui.theme.MartiLocationTrackerCase
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
@@ -108,6 +111,7 @@ fun TrackingContent(
                 currentLocation = uiState.displayLocation ?: uiState.currentLocation,
                 routePoints = uiState.routePoints,
                 routeLineSegments = uiState.routeLineSegments,
+                hasLocationPermission = uiState.hasLocationPermission,
                 onRoutePointClick = { point ->
                     onAction(TrackingUiAction.RoutePointClicked(point))
                 },
@@ -151,6 +155,7 @@ private fun TrackingMap(
     currentLocation: UserLocation?,
     routePoints: List<RoutePoint>,
     routeLineSegments: List<List<RoutePoint>>,
+    hasLocationPermission: Boolean,
     onRoutePointClick: (RoutePoint) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -159,49 +164,52 @@ private fun TrackingMap(
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(mapLocation, DEFAULT_ZOOM)
     }
+    val hasMovedToInitialLocation = remember { mutableStateOf(false) }
 
     LaunchedEffect(currentLocation) {
-        currentLocation?.let { location ->
+        if (currentLocation != null && !hasMovedToInitialLocation.value) {
+            hasMovedToInitialLocation.value = true
             cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngZoom(location.toLatLng(), DEFAULT_ZOOM)
+                CameraUpdateFactory.newLatLngZoom(currentLocation.toLatLng(), DEFAULT_ZOOM)
             )
         }
     }
 
-    GoogleMap(
-        modifier = modifier,
-        cameraPositionState = cameraPositionState,
-        properties = MapProperties(isMyLocationEnabled = false)
-    ) {
-        routeLineSegments.forEach { segment ->
-            if (segment.size > 1) {
-                Polyline(
-                    points = segment.map { point -> point.toLatLng() },
-                    color = Color(0xFF4D9BFF),
-                    width = 16f
+    Box(modifier = modifier) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            contentPadding = PaddingValues(
+                top = MAP_CONTROLS_TOP_PADDING,
+                bottom = MAP_CONTROLS_BOTTOM_PADDING
+            ),
+            properties = MapProperties(isMyLocationEnabled = hasLocationPermission),
+            uiSettings = MapUiSettings(
+                compassEnabled = true,
+                myLocationButtonEnabled = hasLocationPermission,
+                zoomControlsEnabled = true
+            )
+        ) {
+            routeLineSegments.forEach { segment ->
+                if (segment.size > 1) {
+                    Polyline(
+                        points = segment.map { point -> point.toLatLng() },
+                        color = Color(0xFF4D9BFF),
+                        width = 16f
+                    )
+                }
+            }
+
+            routePoints.forEachIndexed { index, point ->
+                Marker(
+                    state = MarkerState(position = point.toLatLng()),
+                    title = "Konum ${index + 1}",
+                    onClick = {
+                        onRoutePointClick(point)
+                        false
+                    }
                 )
             }
-        }
-
-        currentLocation?.let { location ->
-            Circle(
-                center = location.toLatLng(),
-                radius = CURRENT_LOCATION_RADIUS_METERS,
-                fillColor = Color(0xFF4D9BFF),
-                strokeColor = Color.White,
-                strokeWidth = 5f
-            )
-        }
-
-        routePoints.forEachIndexed { index, point ->
-            Marker(
-                state = MarkerState(position = point.toLatLng()),
-                title = "Konum ${index + 1}",
-                onClick = {
-                    onRoutePointClick(point)
-                    false
-                }
-            )
         }
     }
 }
@@ -226,7 +234,8 @@ private fun locationPermissions(): Array<String> {
 }
 
 private const val DEFAULT_ZOOM = 16f
-private const val CURRENT_LOCATION_RADIUS_METERS = 9.0
+private val MAP_CONTROLS_TOP_PADDING = 232.dp
+private val MAP_CONTROLS_BOTTOM_PADDING = 64.dp
 
 @Preview(showBackground = true)
 @Composable

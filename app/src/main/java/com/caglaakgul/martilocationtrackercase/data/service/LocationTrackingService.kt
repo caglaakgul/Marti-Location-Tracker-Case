@@ -70,8 +70,10 @@ class LocationTrackingService : Service() {
                 }
                 .collect { location ->
                     trackingStateStore.setCurrentLocation(location)
-                    trackingStateStore.addLiveRouteLocation(location)
-                    addRoutePointUseCase(location, routeSegmentId)
+                    val isRoutePointAdded = addRoutePointUseCase(location, routeSegmentId)
+                    if (isRoutePointAdded) {
+                        trackingStateStore.addLiveRouteLocation(location)
+                    }
                 }
         }
     }

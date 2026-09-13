@@ -9,10 +9,23 @@ import javax.inject.Inject
 class AddRoutePointUseCase @Inject constructor(
     private val routeRepository: RouteRepository
 ) {
-    suspend operator fun invoke(location: UserLocation, segmentId: Long) {
+    suspend operator fun invoke(location: UserLocation, segmentId: Long): Boolean {
+        val firstPoint = routeRepository.getFirstPoint(segmentId)
+        val lastPoint = routeRepository.getLastPoint(segmentId)
+        if (lastPoint != null) {
+            val minDistanceToRecord = location.accuracyMeters
+                ?.coerceAtLeast(MIN_DISTANCE_BETWEEN_ROUTE_POINTS_METERS)
+                ?: MIN_DISTANCE_BETWEEN_ROUTE_POINTS_METERS
+
+            if (lastPoint.distanceTo(location) < minDistanceToRecord) {
+                return false
+            }
+        }
+
         val lastMarkerPoint = routeRepository.getLastMarkerPoint(segmentId)
-        val shouldMarkPoint = lastMarkerPoint == null ||
-            lastMarkerPoint.distanceTo(location) >= MIN_DISTANCE_BETWEEN_MARKERS_METERS
+        val markerReferencePoint = lastMarkerPoint ?: firstPoint
+        val shouldMarkPoint = markerReferencePoint != null &&
+            markerReferencePoint.distanceTo(location) >= MIN_DISTANCE_BETWEEN_MARKERS_METERS
 
         routeRepository.addPoint(
             location.toRoutePoint(
@@ -20,6 +33,7 @@ class AddRoutePointUseCase @Inject constructor(
                 segmentId = segmentId
             )
         )
+        return true
     }
 
     private fun RoutePoint.distanceTo(location: UserLocation): Float {
@@ -45,6 +59,7 @@ class AddRoutePointUseCase @Inject constructor(
     }
 
     private companion object {
+        const val MIN_DISTANCE_BETWEEN_ROUTE_POINTS_METERS = 10f
         const val MIN_DISTANCE_BETWEEN_MARKERS_METERS = 100f
     }
 }

@@ -8,6 +8,10 @@ interface RouteRepository {
 
     suspend fun getLastMarkerPoint(segmentId: Long): RoutePoint?
 
+    suspend fun getFirstPoint(segmentId: Long): RoutePoint?
+
+    suspend fun getLastPoint(segmentId: Long): RoutePoint?
+
     suspend fun addPoint(point: RoutePoint)
 
     suspend fun clearRoute()

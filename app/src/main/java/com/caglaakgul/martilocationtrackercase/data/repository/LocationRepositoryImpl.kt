@@ -43,7 +43,8 @@ class LocationRepositoryImpl @Inject constructor(
             UserLocation(
                 latitude = location.latitude,
                 longitude = location.longitude,
-                recordedAt = location.time
+                recordedAt = location.time,
+                accuracyMeters = location.accuracyMeters()
             )
         }
     }
@@ -79,7 +80,8 @@ class LocationRepositoryImpl @Inject constructor(
                         UserLocation(
                             latitude = location.latitude,
                             longitude = location.longitude,
-                            recordedAt = location.time
+                            recordedAt = location.time,
+                            accuracyMeters = location.accuracyMeters()
                         )
                     )
                 }
@@ -102,4 +104,8 @@ class LocationRepositoryImpl @Inject constructor(
         const val FASTEST_LOCATION_UPDATE_INTERVAL_MILLIS = 500L
         const val MIN_LOCATION_UPDATE_DISTANCE_METERS = 0f
     }
+}
+
+private fun android.location.Location.accuracyMeters(): Float? {
+    return if (hasAccuracy()) accuracy else null
 }
